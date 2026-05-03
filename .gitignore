@@ -1,0 +1,20 @@
+# Sanal ortam klasörü
+venv/
+.venv/
+env/
+scripts/
+
+# Veri setleri
+dataset/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.env
+instance/
+.secret
+
+.vscode/
+.idea/
+*.swp
