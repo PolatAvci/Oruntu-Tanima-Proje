@@ -18,3 +18,6 @@ instance/
 .vscode/
 .idea/
 *.swp
+
+# Model ağırlıkları
+siamese_signature_model.pth

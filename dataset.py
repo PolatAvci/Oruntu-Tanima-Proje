@@ -6,21 +6,28 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 class SignatureDataset(Dataset):
-    def __init__(self, root_dir, transform=None):
+    # is_train parametresini ekliyoruz. Eğitim ve Validasyon davranışını ayırmak için.
+    def __init__(self, root_dir, transform=None, is_train=True): 
         self.root_dir = root_dir
         self.transform = transform
+        self.is_train = is_train
         
         self.org_dir = os.path.join(root_dir, 'org')
         self.forg_dir = os.path.join(root_dir, 'forg')
         
-        # os.listdir sırası işletim sistemine göre değişebilir, mutlaka sorted() kullanılmalı
-        self.org_files = sorted([f for f in os.listdir(self.org_dir) if f.lower().endswith(('.png', '.tif'))])
-        self.forg_files = sorted([f for f in os.listdir(self.forg_dir) if f.lower().endswith(('.png', '.tif'))])
+        self.org_files = sorted([f for f in os.listdir(self.org_dir) if f.lower().endswith(('.png', '.tif', '.jpg', '.jpeg'))])
+        self.forg_files = sorted([f for f in os.listdir(self.forg_dir) if f.lower().endswith(('.png', '.tif', '.jpg', '.jpeg'))])
         
         self.writers = self._group_by_writer()
         
-        # Sabit (deterministik) çiftleri sınıf oluşturulurken bir kere tanımlıyoruz
-        self.pairs = self._generate_static_pairs()
+        # Validasyon/Test setleri SADECE BİR KERE ve SABİT oluşturulur.
+        # Eğitim seti ise epoch başında yeniden oluşturulacağı için başlangıçta boş kalabilir veya ilk epoch için oluşturulabilir.
+        if not self.is_train:
+             # Validasyon hep aynı seed ile oluşturulsun ki adil kıyaslama yapılsın
+             self.pairs = self.generate_pairs(epoch_seed=22) 
+        else:
+             # Eğitim için ilk epoch çiftlerini oluştur
+             self.pairs = self.generate_pairs(epoch_seed=0)
 
     def _group_by_writer(self):
         writers = {}
@@ -37,25 +44,26 @@ class SignatureDataset(Dataset):
                 
         return writers
 
-    def _generate_static_pairs(self):
+    # Artık statik değil, verilen seed'e göre dinamik çift üretiyor
+    def generate_pairs(self, epoch_seed): 
         pairs = []
-        # Sabit bir seed atayarak validasyon/test kümelerinin her çalıştırmada aynı kalmasını sağlıyoruz
-        rng = random.Random(22) 
+        # Her epoch için farklı ama tekrar edilebilir bir seed
+        rng = random.Random(epoch_seed) 
         
         for writer_id, data in self.writers.items():
             orgs = data['org']
             forgs = data['forg']
             
-            # Her orijinal imza için 1 pozitif, 1 negatif çift oluşturuyoruz
             for img1_path in orgs:
-                # 1. Pozitif Çift Oluşturma
-                img2_org_path = rng.choice(orgs)
-                pairs.append((img1_path, img2_org_path, 1.0)) # 1.0: Gerçek
+                # 1. Pozitif Çift (Kendisinden farklı bir orijinal seç)
+                available_orgs = [img for img in orgs if img != img1_path]
+                img2_org_path = rng.choice(available_orgs) if available_orgs else img1_path
+                pairs.append((img1_path, img2_org_path, 1.0)) 
                 
-                # 2. Negatif Çift Oluşturma (Eğer yazarın sahte imzası varsa)
+                # 2. Negatif Çift
                 if forgs:
                     img2_forg_path = rng.choice(forgs)
-                    pairs.append((img1_path, img2_forg_path, 0.0)) # 0.0: Sahte
+                    pairs.append((img1_path, img2_forg_path, 0.0)) 
                     
         return pairs
 
@@ -63,9 +71,7 @@ class SignatureDataset(Dataset):
         return len(self.pairs) 
 
     def __getitem__(self, idx):
-        # Doğrudan pre-calculated listeden index ile çekiyoruz
         img1_path, img2_path, label_val = self.pairs[idx]
-        
         label = torch.tensor(label_val, dtype=torch.float32)
         
         img1 = Image.open(img1_path).convert('RGB')

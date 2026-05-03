@@ -56,8 +56,8 @@ val_transform = transforms.Compose([
 ])
 
 # 3. Dataset ve Dataloader Tanımları
-train_dataset = SignatureDataset(root_dir="dataset/processed_signatures/train", transform=train_transform)
-val_dataset = SignatureDataset(root_dir="dataset/processed_signatures/val", transform=val_transform)
+train_dataset = SignatureDataset(root_dir="dataset/processed_signatures/train", transform=train_transform, is_train=True)
+val_dataset = SignatureDataset(root_dir="dataset/processed_signatures/val", transform=val_transform, is_train=False)
 
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False)
@@ -72,9 +72,15 @@ history_train_loss = []
 history_val_loss = []
 
 # 5. Eğitim Döngüsü
-num_epochs = 20 
+num_epochs = 20
+base_seed = 42
 
 for epoch in range(num_epochs):
+
+    # Epoch numarasına göre yeni bir seed belirliyoruz.
+    # Örn: 1. Epoch -> seed 43, 2. Epoch -> seed 44...
+    current_epoch_seed = base_seed + epoch
+    train_dataset.pairs = train_dataset.generate_pairs(epoch_seed=current_epoch_seed)
     
     # --- EĞİTİM AŞAMASI (TRAIN) ---
     model.train() 
