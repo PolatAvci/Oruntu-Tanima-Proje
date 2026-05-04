@@ -2,7 +2,8 @@ import os
 import random
 import numpy as np
 import torch
-import matplotlib.pyplot as plt # Grafikler için eklendi
+import torch.nn.functional as F # Mesafe hesaplamak için eklendi
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -10,32 +11,22 @@ from contrastive_loss import ContrastiveLoss
 from model import SignatureSiameseNetwork
 from dataset import SignatureDataset
 
-
 def set_deterministic_seed(seed=42):
-    # Python, NumPy ve PyTorch tohumlarını sabitle
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    
-    # Donanım hızlandırıcı tohumlarını sabitle
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed) # Multi-GPU için
+        torch.cuda.manual_seed_all(seed)
     elif torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
-        
-    # PyTorch'un arka plan optimizasyonlarını deterministik yap
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
 set_deterministic_seed(22)
 
 # 1. Cihaz Ayarı
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else 
-    "mps" if torch.backends.mps.is_available() else 
-    "cpu"
-)
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 print(f"Eğitim için kullanılan donanım: {device}")
 
 # 2. Ön İşleme
@@ -67,24 +58,24 @@ model = SignatureSiameseNetwork(embedding_dim=128, dropout_rate=0.5).to(device)
 criterion = ContrastiveLoss(margin=1.0)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
-# --- GRAFİK İÇİN LİSTELER (YENİ EKLENDİ) ---
-history_train_loss = []
-history_val_loss = []
+# --- METRİKLER İÇİN LİSTELER ---
+history_train_loss, history_val_loss = [], []
+history_train_acc, history_val_acc = [], []
 
 # 5. Eğitim Döngüsü
 num_epochs = 20
 base_seed = 42
+threshold = 0.5 # Mesafe 0.5'ten küçükse gerçek (1), büyükse sahte (0) kabul edeceğiz
 
 for epoch in range(num_epochs):
-
-    # Epoch numarasına göre yeni bir seed belirliyoruz.
-    # Örn: 1. Epoch -> seed 43, 2. Epoch -> seed 44...
     current_epoch_seed = base_seed + epoch
     train_dataset.pairs = train_dataset.generate_pairs(epoch_seed=current_epoch_seed)
     
     # --- EĞİTİM AŞAMASI (TRAIN) ---
     model.train() 
     train_loss = 0.0
+    train_correct = 0 # Doğru tahminleri saymak için
+    train_total = 0   # Toplam tahminleri saymak için
     
     for i, data in enumerate(train_dataloader, 0):
         img1, img2, label = data
@@ -98,12 +89,25 @@ for epoch in range(num_epochs):
         
         train_loss += loss.item()
         
+        # Accuracy Hesaplama (Train)
+        with torch.no_grad():
+            distances = F.pairwise_distance(output1, output2)
+            # Mesafe threshold'dan küçükse 1 (Gerçek), büyükse 0 (Sahte) tahmin et
+            predictions = (distances < threshold).float()
+            train_correct += (predictions == label).sum().item()
+            train_total += label.size(0)
+            
     avg_train_loss = train_loss / len(train_dataloader)
-    history_train_loss.append(avg_train_loss) # Listeye kaydet
+    avg_train_acc = train_correct / train_total
+    
+    history_train_loss.append(avg_train_loss)
+    history_train_acc.append(avg_train_acc)
     
     # --- DOĞRULAMA AŞAMASI (VALIDATION) ---
     model.eval() 
     val_loss = 0.0
+    val_correct = 0
+    val_total = 0
     
     with torch.no_grad():
         for i, data in enumerate(val_dataloader, 0):
@@ -114,32 +118,48 @@ for epoch in range(num_epochs):
             loss = criterion(output1, output2, label)
             val_loss += loss.item()
             
+            # Accuracy Hesaplama (Val)
+            distances = F.pairwise_distance(output1, output2)
+            predictions = (distances < threshold).float()
+            val_correct += (predictions == label).sum().item()
+            val_total += label.size(0)
+            
     avg_val_loss = val_loss / len(val_dataloader)
-    history_val_loss.append(avg_val_loss) # Listeye kaydet
+    avg_val_acc = val_correct / val_total
     
-    print(f"Epoch [{epoch+1}/{num_epochs}] | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+    history_val_loss.append(avg_val_loss)
+    history_val_acc.append(avg_val_acc)
+    
+    print(f"Epoch [{epoch+1}/{num_epochs}] | "
+          f"Train Loss: {avg_train_loss:.4f} - Acc: {avg_train_acc:.4f} | "
+          f"Val Loss: {avg_val_loss:.4f} - Acc: {avg_val_acc:.4f}")
 
 print("Eğitim Tamamlandı! Model ağırlıkları kaydediliyor...")
+torch.save(model.state_dict(), "siamese_signature_model.pth")
+print("Ağırlıklar başarıyla kaydedildi!")
 
-# --- MODELİ KAYDETME ---
-model_save_path = "siamese_signature_model.pth"
-torch.save(model.state_dict(), model_save_path)
-print(f"Eğitilmiş model ağırlıkları '{model_save_path}' dosyasına başarıyla kaydedildi!")
+# --- GRAFİK ÇİZİMİ (Loss ve Accuracy Yan Yana) ---
+print("Grafikler oluşturuluyor...")
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
+# 1. Grafik: Loss Eğrisi
+ax1.plot(range(1, num_epochs + 1), history_train_loss, label='Train Loss', color='blue', marker='o')
+ax1.plot(range(1, num_epochs + 1), history_val_loss, label='Validation Loss', color='red', marker='x')
+ax1.set_title('Eğitim ve Doğrulama Loss Değerleri', fontsize=14)
+ax1.set_xlabel('Epoch', fontsize=12)
+ax1.set_ylabel('Contrastive Loss', fontsize=12)
+ax1.legend(fontsize=12)
+ax1.grid(True, linestyle='--', alpha=0.7)
 
-# --- GRAFİK ÇİZİMİ VE KAYDETME (YENİ EKLENDİ) ---
-print("Train - Validation grafiği oluşturuluyor...")
+# 2. Grafik: Accuracy Eğrisi
+ax2.plot(range(1, num_epochs + 1), history_train_acc, label='Train Accuracy', color='green', marker='o')
+ax2.plot(range(1, num_epochs + 1), history_val_acc, label='Validation Accuracy', color='orange', marker='x')
+ax2.set_title('Eğitim ve Doğrulama Accuracy (%)', fontsize=14)
+ax2.set_xlabel('Epoch', fontsize=12)
+ax2.set_ylabel('Accuracy', fontsize=12)
+ax2.legend(fontsize=12)
+ax2.grid(True, linestyle='--', alpha=0.7)
 
-plt.figure(figsize=(10, 6)) # Grafiğin boyutunu belirle
-plt.plot(range(1, num_epochs + 1), history_train_loss, label='Train Loss', color='blue', marker='o')
-plt.plot(range(1, num_epochs + 1), history_val_loss, label='Validation Loss', color='red', marker='x')
-
-plt.title('Eğitim ve Doğrulama Kayıp (Loss) Eğrisi', fontsize=14)
-plt.xlabel('Epoch', fontsize=12)
-plt.ylabel('Contrastive Loss', fontsize=12)
-plt.legend(fontsize=12)
-plt.grid(True, linestyle='--', alpha=0.7)
-
-# Grafiği çalışma dizinine kaydet
-plt.savefig('train_val_loss.png', dpi=300, bbox_inches='tight')
-print("Grafik 'train_val_loss.png' olarak başarıyla kaydedildi!")
+plt.tight_layout()
+plt.savefig('train_val_metrics.png', dpi=300, bbox_inches='tight')
+print("Grafikler 'train_val_metrics.png' olarak başarıyla kaydedildi!")
