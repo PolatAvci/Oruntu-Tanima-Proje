@@ -100,5 +100,5 @@ if __name__ == "__main__":
     query_image = "dataset/processed_signatures/val/forg/forgeries_6_5.png" 
     
     print("Tahmin yapılıyor...")
-    # threshold'u eğitimde kullandığın 0.5 olarak bıraktım, istersen değiştirebilirsin
-    dist, result = predict_signature(reference_image, query_image, model, device, threshold=0.5)
+    # threshold eğitimde kullanılan 0.15 olarak bırakıldı
+    dist, result = predict_signature(reference_image, query_image, model, device, threshold=0.15)

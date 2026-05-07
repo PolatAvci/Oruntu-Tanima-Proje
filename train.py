@@ -65,7 +65,7 @@ history_train_acc, history_val_acc = [], []
 # 5. Eğitim Döngüsü
 num_epochs = 20
 base_seed = 42
-threshold = 0.5 # Mesafe 0.5'ten küçükse gerçek (1), büyükse sahte (0) kabul edeceğiz
+threshold = 0.15
 
 for epoch in range(num_epochs):
     current_epoch_seed = base_seed + epoch
