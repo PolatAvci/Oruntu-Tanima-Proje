@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
@@ -26,6 +27,18 @@ class SignatureRepositoryImpl implements SignatureRepository {
   @override
   Future<Either<Failure, File>> pickTestSignature({required bool fromCamera}) async {
     return await _pickImage(fromCamera: fromCamera);
+  }
+
+  @override
+  Future<Either<Failure, File>> saveCroppedSignature(Uint8List bytes) async {
+    try {
+      final file = await localDataSource.saveCroppedImage(bytes);
+      return Right(file);
+    } on ImagePickException catch (e) {
+      return Left(ImagePickFailure(message: e.message));
+    } catch (e) {
+      return Left(ImagePickFailure(message: e.toString()));
+    }
   }
 
   /// Shared image picking logic with exception-to-failure mapping.

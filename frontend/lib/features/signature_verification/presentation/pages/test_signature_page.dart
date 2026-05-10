@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../providers/signature_verification_provider.dart';
 import '../widgets/gradient_button.dart';
+import '../widgets/signature_crop_dialog.dart';
 import '../widgets/signature_image_area.dart';
 import '../widgets/wizard_step_indicator.dart';
 import 'signature_verification_result_page.dart';
@@ -42,6 +43,29 @@ class TestSignaturePage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Picks an image using the domain layer, then presents the crop dialog.
+  Future<void> _pickAndCropImage(
+    BuildContext context, {
+    required bool fromCamera,
+  }) async {
+    final provider = context.read<SignatureVerificationProvider>();
+
+    await provider.pickTestSignature(fromCamera: fromCamera);
+
+    if (!context.mounted) return;
+
+    final pickedFile = provider.testFile;
+    if (pickedFile == null) return;
+
+    final bytes = await pickedFile.readAsBytes();
+    if (!context.mounted) return;
+
+    final croppedBytes = await showSignatureCropDialog(context, imageBytes: bytes);
+    if (croppedBytes == null || !context.mounted) return;
+
+    await provider.saveCroppedTest(croppedBytes);
   }
 
   Widget _buildHeader() {
@@ -119,7 +143,9 @@ class TestSignaturePage extends StatelessWidget {
               child: _ActionButton(
                 icon: Icons.camera_alt_outlined,
                 label: 'Camera',
-                onTap: isLoading ? null : () => _pickImage(context, fromCamera: true),
+                onTap: isLoading
+                    ? null
+                    : () => _pickAndCropImage(context, fromCamera: true),
               ),
             ),
             const SizedBox(width: 14),
@@ -127,7 +153,9 @@ class TestSignaturePage extends StatelessWidget {
               child: _ActionButton(
                 icon: Icons.photo_library_outlined,
                 label: 'Gallery',
-                onTap: isLoading ? null : () => _pickImage(context, fromCamera: false),
+                onTap: isLoading
+                    ? null
+                    : () => _pickAndCropImage(context, fromCamera: false),
               ),
             ),
           ],
@@ -152,12 +180,6 @@ class TestSignaturePage extends StatelessWidget {
               curve: Curves.easeOutCubic,
             ),
       ],
-    );
-  }
-
-  void _pickImage(BuildContext context, {required bool fromCamera}) {
-    context.read<SignatureVerificationProvider>().pickTestSignature(
-      fromCamera: fromCamera,
     );
   }
 

@@ -17,7 +17,7 @@ class AppConstants {
   static const int apiSimulationDelaySeconds = 2;
 
   // API
-  static const String apiBaseUrl = 'http://192.168.1.70:8000';
+  static const String apiBaseUrl = 'http://10.0.2.2:8000';
 
   // Validation Messages
   static const String missingSignaturesError =

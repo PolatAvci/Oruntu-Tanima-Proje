@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/verification_result_entity.dart';
 import '../../domain/usecases/pick_reference_signature.dart';
 import '../../domain/usecases/pick_test_signature.dart';
+import '../../domain/usecases/save_cropped_signature.dart';
 import '../../domain/usecases/verify_signatures.dart';
 
 /// Provider that manages the state for the signature verification flow.
@@ -15,14 +17,17 @@ class SignatureVerificationProvider extends ChangeNotifier {
   final PickReferenceSignature _pickReferenceSignature;
   final PickTestSignature _pickTestSignature;
   final VerifySignatures _verifySignatures;
+  final SaveCroppedSignature _saveCroppedSignature;
 
   SignatureVerificationProvider({
     required PickReferenceSignature pickReferenceSignature,
     required PickTestSignature pickTestSignature,
     required VerifySignatures verifySignatures,
-  })  : _pickReferenceSignature = pickReferenceSignature,
-        _pickTestSignature = pickTestSignature,
-        _verifySignatures = verifySignatures;
+    required SaveCroppedSignature saveCroppedSignature,
+  }) : _pickReferenceSignature = pickReferenceSignature,
+       _pickTestSignature = pickTestSignature,
+       _verifySignatures = verifySignatures,
+       _saveCroppedSignature = saveCroppedSignature;
 
   // State
   File? _referenceFile;
@@ -74,6 +79,40 @@ class SignatureVerificationProvider extends ChangeNotifier {
     _setLoading(false);
   }
 
+  /// Saves cropped bytes as the reference signature file.
+  Future<void> saveCroppedReference(Uint8List bytes) async {
+    _setLoading(true);
+    _clearError();
+
+    final result = await _saveCroppedSignature(
+      SaveCroppedSignatureParams(bytes: bytes),
+    );
+
+    result.fold(
+      (failure) => _setError(_mapFailureToMessage(failure)),
+      (file) => _referenceFile = file,
+    );
+
+    _setLoading(false);
+  }
+
+  /// Saves cropped bytes as the test signature file.
+  Future<void> saveCroppedTest(Uint8List bytes) async {
+    _setLoading(true);
+    _clearError();
+
+    final result = await _saveCroppedSignature(
+      SaveCroppedSignatureParams(bytes: bytes),
+    );
+
+    result.fold(
+      (failure) => _setError(_mapFailureToMessage(failure)),
+      (file) => _testFile = file,
+    );
+
+    _setLoading(false);
+  }
+
   /// Verifies the two selected signatures.
   Future<void> verifySignatures() async {
     if (_referenceFile == null || _testFile == null) {
@@ -86,10 +125,7 @@ class SignatureVerificationProvider extends ChangeNotifier {
     _clearResult();
 
     final result = await _verifySignatures(
-      VerifySignaturesParams(
-        reference: _referenceFile!,
-        test: _testFile!,
-      ),
+      VerifySignaturesParams(reference: _referenceFile!, test: _testFile!),
     );
 
     result.fold(

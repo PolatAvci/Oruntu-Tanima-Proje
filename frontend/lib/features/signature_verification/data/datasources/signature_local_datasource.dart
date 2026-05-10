@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../../core/errors/exceptions.dart';
 
 /// Contract for local image picking operations.
@@ -7,6 +9,9 @@ abstract class SignatureLocalDataSource {
   /// Picks an image from the camera or gallery.
   /// [fromCamera] determines the source.
   Future<File> pickImage({required bool fromCamera});
+
+  /// Saves cropped image bytes to a temporary file.
+  Future<File> saveCroppedImage(Uint8List bytes);
 }
 
 /// Concrete implementation using the `image_picker` plugin.
@@ -35,6 +40,20 @@ class SignatureLocalDataSourceImpl implements SignatureLocalDataSource {
       rethrow;
     } catch (e) {
       throw ImagePickException(message: 'Failed to pick image: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<File> saveCroppedImage(Uint8List bytes) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final file = await File(
+        '${tempDir.path}/sig_${DateTime.now().millisecondsSinceEpoch}.png',
+      ).create();
+      await file.writeAsBytes(bytes);
+      return file;
+    } catch (e) {
+      throw ImagePickException(message: 'Failed to save cropped image: ${e.toString()}');
     }
   }
 }

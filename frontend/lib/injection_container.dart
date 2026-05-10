@@ -6,6 +6,7 @@ import 'features/signature_verification/data/repositories/signature_repository_i
 import 'features/signature_verification/domain/repositories/signature_repository.dart';
 import 'features/signature_verification/domain/usecases/pick_reference_signature.dart';
 import 'features/signature_verification/domain/usecases/pick_test_signature.dart';
+import 'features/signature_verification/domain/usecases/save_cropped_signature.dart';
 import 'features/signature_verification/domain/usecases/verify_signatures.dart';
 import 'features/signature_verification/presentation/providers/signature_verification_provider.dart';
 
@@ -39,6 +40,7 @@ void initDependencies() {
   // Use Cases
   sl.registerLazySingleton(() => PickReferenceSignature(sl()));
   sl.registerLazySingleton(() => PickTestSignature(sl()));
+  sl.registerLazySingleton(() => SaveCroppedSignature(sl()));
   sl.registerLazySingleton(() => VerifySignatures(sl()));
 
   // Provider (factory because it holds ephemeral UI state)
@@ -47,6 +49,7 @@ void initDependencies() {
       pickReferenceSignature: sl(),
       pickTestSignature: sl(),
       verifySignatures: sl(),
+      saveCroppedSignature: sl(),
     ),
   );
 }
