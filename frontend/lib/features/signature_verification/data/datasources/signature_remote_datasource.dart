@@ -1,5 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
+import 'package:http/http.dart' as http;
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/verification_result_model.dart';
@@ -10,27 +11,48 @@ abstract class SignatureRemoteDataSource {
   Future<VerificationResultModel> verifySignatures(File reference, File test);
 }
 
-/// Simulates a remote API call for signature verification.
+/// Concrete implementation that calls the FastAPI verification backend.
 class SignatureRemoteDataSourceImpl implements SignatureRemoteDataSource {
-  final Random _random;
-
-  SignatureRemoteDataSourceImpl({Random? random}) : _random = random ?? Random();
-
   @override
   Future<VerificationResultModel> verifySignatures(File reference, File test) async {
     try {
-      // Simulate network latency.
-      await Future.delayed(
-        const Duration(seconds: AppConstants.apiSimulationDelaySeconds),
+      final uri = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/verify-signature/');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.files.add(
+        await http.MultipartFile.fromPath('reference_img', reference.path),
+      );
+      request.files.add(
+        await http.MultipartFile.fromPath('query_img', test.path),
       );
 
-      // Simulate a random API response.
-      final bool isGenuine = _random.nextBool();
-      final double confidence = 85.0 + _random.nextDouble() * 14.0;
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        throw ServerException(
+          message: 'Verification failed with status ${response.statusCode}',
+        );
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>?;
+
+      if (data == null) {
+        throw ServerException(message: 'Invalid response: missing data field');
+      }
+
+      final bool isGenuine = data['is_genuine'] as bool;
+      final double distance = (data['distance'] as num).toDouble();
+
+      final double confidencePercentage =
+          ((1.0 - distance.clamp(0.0, 1.0)) * 100.0);
 
       return VerificationResultModel(
         isGenuine: isGenuine,
-        confidencePercentage: double.parse(confidence.toStringAsFixed(2)),
+        confidencePercentage: double.parse(
+          confidencePercentage.toStringAsFixed(2),
+        ),
       );
     } catch (e) {
       throw ServerException(message: 'Verification service error: ${e.toString()}');

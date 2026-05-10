@@ -16,6 +16,10 @@ class AppConstants {
   // Durations
   static const int apiSimulationDelaySeconds = 2;
 
+  // API
+  static const String apiBaseUrl = 'http://192.168.1.70:8000';
+
   // Validation Messages
-  static const String missingSignaturesError = 'Please select both signatures before verifying.';
+  static const String missingSignaturesError =
+      'Please select both signatures before verifying.';
 }

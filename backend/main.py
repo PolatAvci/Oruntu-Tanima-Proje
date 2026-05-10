@@ -21,4 +21,4 @@ app.add_middleware(
 # Rotaları (Controller) Uygulamaya Ekle
 app.include_router(api_router)
 
-# uvicorn main:app --reload komutu ile çalıştırılacak
+# uvicorn main:app --host 0.0.0.0 --port 8000 komutu ile çalıştırılacak
