@@ -44,29 +44,58 @@ class SignatureDataset(Dataset):
                 
         return writers
 
-    # Artık statik değil, verilen seed'e göre dinamik çift üretiyor
     def generate_pairs(self, epoch_seed): 
         pairs = []
-        # Her epoch için farklı ama tekrar edilebilir bir seed
         rng = random.Random(epoch_seed) 
+        
+        all_writer_ids = list(self.writers.keys())
         
         for writer_id, data in self.writers.items():
             orgs = data['org']
             forgs = data['forg']
             
             for img1_path in orgs:
-                # 1. Pozitif Çift (Kendisinden farklı bir orijinal seç)
+                # ==========================================
+                # 1. POZİTİF ÇİFT (Sürekli Eklenecek - Label 1.0)
+                # ==========================================
                 available_orgs = [img for img in orgs if img != img1_path]
                 img2_org_path = rng.choice(available_orgs) if available_orgs else img1_path
                 pairs.append((img1_path, img2_org_path, 1.0)) 
                 
-                # 2. Negatif Çift
+                # ==========================================
+                # 2. NEGATİF ÇİFT (Sadece 1 Tane Eklenecek - Label 0.0)
+                # ==========================================
+                negative_options = []
+                
                 if forgs:
-                    img2_forg_path = rng.choice(forgs)
-                    pairs.append((img1_path, img2_forg_path, 0.0)) 
+                    negative_options.append('forgery') # Kendi sahtesi
+                if len(all_writer_ids) > 1:
+                    negative_options.append('unrelated') # Başkasının gerçeği
                     
+                if negative_options:
+                    # %50 ihtimalle sahte, %50 ihtimalle alakasız seç
+                    selected_negative_type = rng.choice(negative_options)
+                    
+                    if selected_negative_type == 'forgery':
+                        img2_neg_path = rng.choice(forgs)
+                        pairs.append((img1_path, img2_neg_path, 0.0))
+                        
+                    elif selected_negative_type == 'unrelated':
+                        other_writers = [w for w in all_writer_ids if w != writer_id]
+                        random_other_writer_id = rng.choice(other_writers)
+                        other_writer_orgs = self.writers[random_other_writer_id]['org']
+                        
+                        if other_writer_orgs:
+                            img2_neg_path = rng.choice(other_writer_orgs)
+                            pairs.append((img1_path, img2_neg_path, 0.0))
+                        else:
+                            # Çok nadir bir edge-case (seçilen yazarın org imzası yoksa)
+                            # Çökmeyi engellemek için kendi sahtesini koy
+                            if forgs:
+                                pairs.append((img1_path, rng.choice(forgs), 0.0))
+                        
         return pairs
-
+    
     def __len__(self):
         return len(self.pairs) 
 

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 # Kendi model sınıfını içe aktar
 from model import SignatureSiameseNetwork
+from transforms import PadToSquare
 
 def load_model(model_path, device):
     """Eğitilmiş modeli yükler ve değerlendirme moduna alır."""
@@ -23,6 +24,7 @@ def load_model(model_path, device):
 def preprocess_image(image_path):
     """Görüntüyü ağın beklediği formata dönüştürür (Val Transform ile aynı)."""
     transform = transforms.Compose([
+        PadToSquare(fill=255),
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3), 
         transforms.ToTensor(), 
@@ -96,8 +98,8 @@ if __name__ == "__main__":
     
     # 3. Test Edilecek Resim Yolları (BURAYI KENDİ RESİMLERİNE GÖRE DEĞİŞTİR)
     # Test setinden hiç görülmemiş bir yazarın iki imzasını seçebilirsin
-    reference_image = "dataset/processed_signatures/val/org/original_6_1.png" 
-    query_image = "dataset/processed_signatures/val/forg/forgeries_6_5.png" 
+    reference_image = "org_armagan.jpeg" 
+    query_image = "org_armagan2.jpeg" 
     
     print("Tahmin yapılıyor...")
     # threshold eğitimde kullanılan 0.15 olarak bırakıldı
